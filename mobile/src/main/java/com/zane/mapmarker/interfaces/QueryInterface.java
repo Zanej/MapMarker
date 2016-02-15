@@ -44,6 +44,13 @@ public interface QueryInterface {
      */
     public QueryInterface Join(String[] what,ArrayList<HashMap<String,Table>> on,HashMap<String,Object> where);
     /**
+     * Fa una join update
+     * @param what mappa campo => valore
+     * @param on array di due tabelle di join con campi
+     * @param where where di questa tabella
+     */
+    public QueryInterface JoinUpdate(HashMap<String,Object> what,ArrayList<HashMap<String,Table>> on,HashMap<String,Object> where);
+    /**
      * Group by
      * @param params Array dei parametri
      * @param table tabella

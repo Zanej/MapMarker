@@ -24,6 +24,7 @@ public class QueryBuilder implements QueryInterface {
     private String where = "";
     private String groupby = "";
     private String orderby = "";
+    private String which = "";
     private String having = "";
     private String limit = "";
     private static ArrayList<String> queryHistory;
@@ -129,57 +130,63 @@ public class QueryBuilder implements QueryInterface {
     public QueryInterface Join(String[] what,ArrayList<HashMap<String,Table>> on,HashMap<String,Object> where){
         if(on.size() != 2)
             throw new IllegalArgumentException("L'on deve essere un'array di lunghezza due!");
-        switch(this.action){
-            case "SELECT":
-                String last_alias = "a";
-                Iterator al = this.alias.keySet().iterator();
-                Iterator table_alias = this.alias.values().iterator();
-                Iterator on_1table = on.get(0).values().iterator();
-                Table xt = new Table( (Table) on_1table.next());
-                String alias_first_table="";
-                while(al.hasNext()){
-                    last_alias = String.valueOf(al.next());
-                        if (xt.equals(table_alias.next())) {
-                            alias_first_table = last_alias;
-                        }
-                }
-                Iterator table = on.get(1).values().iterator();
-                Table asd = new Table("dummy","dummy",null,null);
-                while(table.hasNext()){
-                    asd = new Table((Table) table.next());
-                }
-                String alias = Character.toString((char) (last_alias.codePointAt(0) + 1));
-                this.alias.put(alias,asd);
-                String join = " JOIN "+asd.getName()+" AS "+alias + " ON ";
-                Iterator on_1field = on.get(0).keySet().iterator();
-                Iterator on_2field = on.get(1).keySet().iterator();
-                while(on_1field.hasNext()){
-                    join+=alias_first_table+"."+on_1field.next()+" = "+alias+"."+on_2field.next();
-                }
-                this.from+=join;
-                this.params+=",";
-                for(String elem : what){
-                    this.params+=alias+"."+elem+",";
-                }
-                this.params = this.params.substring(0,this.params.length()-1);
+        if(this.action=="SELECT") {
+            String last_alias = lastAlias();
+            String alias_first_table = searchAlias(on);
+            Iterator table = on.get(1).values().iterator();
+            Table asd = (Table) table.next();
+            //while(table.hasNext()){
+            //asd = new Table((Table) table.next());
+            //}
+            String alias = Character.toString((char) (last_alias.codePointAt(0) + 1));
+            this.alias.put(alias, asd);
+            String join = setJoin(on,alias_first_table,alias,asd);
+            this.from += join;
+            this.params += ",";
+            for (String elem : what) {
+                this.params += alias + "." + elem + ",";
+            }
+            this.params = this.params.substring(0, this.params.length() - 1);
 
-                String addwhere = setWhere(where,alias);
-                if(addwhere != ""){
-                    this.where+= " AND"+addwhere;
-                }
-                this.query = this.action+" "+this.params+this.from+this.where;
-                
-                //this.where = setWhere
-                break;
-            case "UPDATE":
-                //TODO
-                break;
-            case "DELETE":
-                //TODO
-                break;
-            default:
-                throw new IllegalArgumentException("wtf are you doing");
+            String addwhere = setWhere(where, alias);
+            if (addwhere != "") {
+                this.where += " AND" + addwhere;
+            }
+            this.query = this.action + " " + this.params + this.from + this.where;
+        } else if(this.action == "DELETE"){
+
+        } else {
+            throw new IllegalArgumentException("wtf are you doing");
         }
+        return this;
+    }
+    /**
+     * Fa una join update
+     * @param what mappa campo => valore
+     * @param on array di due tabelle di join con campi
+     * @param where where di questa tabella
+     */
+    public QueryInterface JoinUpdate(HashMap<String,Object> what,ArrayList<HashMap<String,Table>> on,HashMap<String,Object> where){
+        String last_alias = lastAlias();
+        String alias_first_table = searchAlias(on);
+        String alias = Character.toString((char) (last_alias.codePointAt(0) + 1));
+        Iterator table = on.get(1).values().iterator();
+        Table asd = (Table) table.next();
+        this.alias.put(alias,asd);
+        Iterator name = what.keySet().iterator();
+        Iterator val = what.values().iterator();
+        this.params+=",";
+        while(name.hasNext()){
+            this.params+=alias+"."+name.next()+" = '"+val.next()+"',";
+        }
+        this.params = this.params.substring(0, this.params.length() - 1);
+        String join = setJoin(on,alias_first_table,alias,asd);
+        this.from+=join;
+        String where_join = setWhere(where,alias);
+        if(where_join != ""){
+            this.where+=where_join;
+        }
+        this.query = this.action+" "+this.from+" SET "+this.params+this.groupby+this.where+this.orderby;
         return this;
     }
 
@@ -213,7 +220,7 @@ public class QueryBuilder implements QueryInterface {
      */
     @Override
     public QueryInterface OrderBy(String[] params, Table table) {
-        this.orderby += setOrderBy(params,table);
+        this.orderby += setOrderBy(params, table);
         setInternalQuery();
         return this;
     }
@@ -247,6 +254,70 @@ public class QueryBuilder implements QueryInterface {
         return this.query;
     }
     /**
+     * Cerca l'alias delle due tabelle passate
+     * @param on array di due mappe (prima e seconda tabella con campi)
+     * @Ritorna l'alias trovato
+     */
+    private String searchAlias(ArrayList<HashMap<String,Table>> on){
+        String last_alias = "a";
+        Iterator al = this.alias.keySet().iterator();
+        Iterator table_alias = this.alias.values().iterator();
+        Iterator on_1table = on.get(0).values().iterator();
+        Table xt = new Table( (Table) on_1table.next());
+        String alias_first_table="";
+        while(al.hasNext()){
+            last_alias = String.valueOf(al.next());
+            if (xt.equals(table_alias.next())) {
+                alias_first_table = last_alias;
+            }
+        }
+        return alias_first_table == "" ? "a" : alias_first_table;
+    }
+    /**
+     * Cerca un alias da una tabella
+     */
+    private String searchAlias(Table table){
+        String alias = "a";
+        Iterator al = this.alias.keySet().iterator();
+        Iterator tb = this.alias.values().iterator();
+        boolean find = false;
+        while(al.hasNext()){
+            alias = String.valueOf(al.next());
+            if(tb.next().equals((Table) table)){
+                find = true;
+                break;
+            }
+        }
+        if(find){
+            return alias;
+        }
+        return "";
+    }
+    /**
+     * Ritorna l'ultimo alias
+     */
+    private String lastAlias(){
+        Iterator al = this.alias.keySet().iterator();
+        String last = "";
+        while(al.hasNext()){
+            last = String.valueOf(al.next());
+        }
+        return last;
+    }
+    /**
+     * Ritorna la parte join della query date le tabelle
+     * @param on lista tabelle => valori
+     */
+    private String setJoin(ArrayList<HashMap<String,Table>> on,String alias_first,String newalias,Table asd){
+        String join = " JOIN " + asd.getName() + " AS " + alias + " ON ";
+        Iterator on_1field = on.get(0).keySet().iterator();
+        Iterator on_2field = on.get(1).keySet().iterator();
+        while (on_1field.hasNext()) {
+            join += alias_first + "." + on_1field.next() + " = " + alias + "." + on_2field.next();
+        }
+        return join;
+    }
+    /**
      * Ritorna il group by relativo a quella tabella
      * @param params parametri
      * @param table tabella
@@ -277,7 +348,7 @@ public class QueryBuilder implements QueryInterface {
      * @param params parametri
      * @param table tabella
      */
-    public String setOrderBy(String[] params,Table table){
+    private String setOrderBy(String[] params,Table table){
         Iterator keys = this.alias.keySet().iterator();
         Iterator values = this.alias.values().iterator();
         String alias = "";
@@ -471,6 +542,7 @@ public class QueryBuilder implements QueryInterface {
         this.params = "";
         this.having = "";
         this.orderby = "";
+        this.which = "";
         this.groupby = "";
         this.alias.clear();
     }

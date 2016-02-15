@@ -10,6 +10,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.TextView;
 
+import com.zane.mapmarker.classes.QueryBuilderFriendly;
 import com.zane.mapmarker.superclasses.DbHelper;
 import com.zane.mapmarker.superclasses.QueryBuilder;
 import com.zane.mapmarker.superclasses.Table;
@@ -81,6 +82,10 @@ public class Main extends AppCompatActivity {
         que.OrderBy(new String[]{"nome"},new Table("Utenti","ciao",null,null));
         //DELETE
         que.Delete(where, new Table("Utenti", "ciao", null, null)).OrderBy(new String[]{"nome"},new Table("Utenti","ciao",null,null)).Limit("1","");
+        //QueryFriendly
+        QueryBuilderFriendly que_friendly = new QueryBuilderFriendly();
+        que_friendly.Select("Utenti",new String[]{"nome","cognome"},new String[]{"id_utente"},new Object[]{"1"});
+        System.out.println(que_friendly.getQuery());
         //Query History
         TextView testo = (TextView) this.findViewById(R.id.val_sql);
         testo.setText(QueryBuilder.queryHistoryString());
