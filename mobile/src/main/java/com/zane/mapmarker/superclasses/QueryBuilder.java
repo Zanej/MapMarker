@@ -1,6 +1,8 @@
 package com.zane.mapmarker.superclasses;
 
 import android.content.Context;
+import android.database.DatabaseUtils;
+import android.database.sqlite.SQLiteDatabase;
 
 import com.zane.mapmarker.interfaces.QueryInterface;
 
@@ -17,7 +19,7 @@ import java.util.Set;
 public class QueryBuilder implements QueryInterface {
     private String query;
     private HashMap<String,Table> alias;
-    private DbHelper helper;
+    public static DbHelper helper;
     private String action = "";
     private String from = "";
     private String params = "";
@@ -30,11 +32,10 @@ public class QueryBuilder implements QueryInterface {
     private static ArrayList<String> queryHistory;
     public QueryBuilder(){
         this.query = "";
-        this.alias = new HashMap<String,Table>();
+        this.alias = new HashMap<>();
         if(queryHistory == null){
-            queryHistory = new ArrayList<String>();
+            queryHistory = new ArrayList<>();
         }
-        //DbHelper helper = new DbHelper();
     };
     public QueryBuilder(String query,HashMap<String,Table> alias,String action,String from,String params,String where){
         this();
@@ -45,7 +46,6 @@ public class QueryBuilder implements QueryInterface {
         this.where = where;
         Collection<Table> values = alias.values();
         Set<String> keys = alias.keySet();
-        helper = new DbHelper();
         Iterator value =  values.iterator();
         Iterator key = keys.iterator();
         while(value.hasNext()){
@@ -135,9 +135,6 @@ public class QueryBuilder implements QueryInterface {
             String alias_first_table = searchAlias(on);
             Iterator table = on.get(1).values().iterator();
             Table asd = (Table) table.next();
-            //while(table.hasNext()){
-            //asd = new Table((Table) table.next());
-            //}
             String alias = Character.toString((char) (last_alias.codePointAt(0) + 1));
             this.alias.put(alias, asd);
             String join = setJoin(on,alias_first_table,alias,asd);
@@ -184,7 +181,7 @@ public class QueryBuilder implements QueryInterface {
         this.from+=join;
         String where_join = setWhere(where,alias);
         if(where_join != ""){
-            this.where+=where_join;
+            this.where+=" AND " + where_join;
         }
         this.query = this.action+" "+this.from+" SET "+this.params+this.groupby+this.where+this.orderby;
         return this;
@@ -309,12 +306,14 @@ public class QueryBuilder implements QueryInterface {
      * @param on lista tabelle => valori
      */
     private String setJoin(ArrayList<HashMap<String,Table>> on,String alias_first,String newalias,Table asd){
-        String join = " JOIN " + asd.getName() + " AS " + alias + " ON ";
+        String join = " JOIN " + asd.getName() + " AS " + newalias + " ON ";
         Iterator on_1field = on.get(0).keySet().iterator();
         Iterator on_2field = on.get(1).keySet().iterator();
         while (on_1field.hasNext()) {
-            join += alias_first + "." + on_1field.next() + " = " + alias + "." + on_2field.next();
+            join += alias_first + "." + on_1field.next() + " = " + newalias + "." + on_2field.next() + " AND ";
         }
+        if(join.length() >= 5)
+            join = join.substring(0,join.length()-4);
         return join;
     }
     /**
@@ -379,6 +378,12 @@ public class QueryBuilder implements QueryInterface {
         return null;
     }
     /**
+     *
+     */
+    public boolean doSQL(){
+        return this.helper.execSQL(this.query);
+    }
+    /**
      * Ritorna gli alias
      */
     public HashMap<String,Table> getAlias(){
@@ -390,28 +395,32 @@ public class QueryBuilder implements QueryInterface {
      * @param elems elementi (nome => elemento), la prima viene considerata chiave
      * @param typeofkey tipo delle chiavi dei singoli elementi ("UNIQUE","FOREIGN|table|elemento")
      */
-    public boolean createTable(String name,HashMap<String,String> elems,String[] typeofkey){
+    public boolean createTable(String name,HashMap<String,String> elems,HashMap<String,String> typeofkey){
         String query =" CREATE TABLE IF NOT EXISTS "+name+" (";
         Set<String> names = elems.keySet();
         Collection<String> types = elems.values();
-        query+=String.valueOf(" id_"+name).toLowerCase()+" INTEGER PRIMARY KEY AUTO_INCREMENT,";
+        query+=String.valueOf(" id_"+name).toLowerCase()+" INTEGER AUTO_INCREMENT PRIMARY KEY ,";
         Iterator nome = names.iterator();
         Iterator tipl = types.iterator();
-        for(String tipo:typeofkey){
-
-            query+=nome.next()+" "+tipl.next()+" ";
-            if(tipo.indexOf("FOREIGN") > -1) {
-                String[] explode = tipo.split("|");
-                query+="REFERENCES "+explode[1]+"."+explode[2];
+        for(int i=0;i<names.size();i++){
+            String nme = String.valueOf(nome.next());
+            String tipo = String.valueOf(tipl.next());
+            String key = typeofkey.get(nme);
+            query+=nme+" "+tipo+" ";
+            if(key.indexOf("FOREIGN") > -1) {
+                String[] explode = key.split("#");
+                query+="REFERENCES "+explode[1]+"("+explode[2]+")";
             }else{
-                query+=tipo;
+                query+=key;
             }
             query+=",";
         }
         query = query.substring(0,query.length() -1);
         query+=")";
-        
-        return true;
+        this.query = query;
+        //System.out.println(this.query);
+        //return true;
+        return this.doSQL();
     }
 
     /**
@@ -420,14 +429,17 @@ public class QueryBuilder implements QueryInterface {
      * @return stringa
      */
     private String setWhere(HashMap<String,Object> values){
-        String query =" WHERE ";
-        Iterator value = values.values().iterator();
-        Iterator name = values.keySet().iterator();
-        while(value.hasNext()){
-            query+=" a."+name.next()+" = '"+value.next()+"' AND";
+        if(values != null) {
+            String query = " WHERE ";
+            Iterator value = values.values().iterator();
+            Iterator name = values.keySet().iterator();
+            while (value.hasNext()) {
+                query += " a." + name.next() + " = '" + value.next() + "' AND";
+            }
+            query = query.substring(0, query.length() - 3);
+            return query;
         }
-        query = query.substring(0,query.length()-3);
-        return query;
+        return "";
     }
 
     /**
@@ -457,13 +469,15 @@ public class QueryBuilder implements QueryInterface {
      */
     private String setWhere(HashMap<String,Object> where,String alias){
         String query = "";
-        Iterator value = where.values().iterator();
-        Iterator name = where.keySet().iterator();
-        while(value.hasNext()){
-            query+=" "+alias+"."+name.next()+" = '"+value.next()+"' AND";
+        if(where != null) {
+            Iterator value = where.values().iterator();
+            Iterator name = where.keySet().iterator();
+            while (value.hasNext()) {
+                query += " " + alias + "." + name.next() + " = '" + value.next() + "' AND";
+            }
+            if (query.length() > 3)
+                query = query.substring(0, query.length() - 3);
         }
-        if(query.length() > 3)
-            query = query.substring(0,query.length()-3);
         return query;
     }
     /**
@@ -480,8 +494,12 @@ public class QueryBuilder implements QueryInterface {
     }
     private String setParams(String[] what,HashMap<String,Table> alias){
         if(alias.size() == 1){
-            for(String elem : what){
-                query+="a."+elem+",";
+            if(what == null){
+                query+="a.*,";
+            }else {
+                for (String elem : what) {
+                    query += "a." + elem + ",";
+                }
             }
             query = query.substring(0,query.length()-1);
             return query;
@@ -532,6 +550,30 @@ public class QueryBuilder implements QueryInterface {
                 this.query+=this.limit;
                 break;
         }
+    }
+    public QueryBuilder insert(Table table,HashMap<String,String> values){
+        flush();
+        Set<String> columns = values.keySet();
+        Collection<String> val = values.values();
+        Iterator cols = columns.iterator();
+        Iterator vals = val.iterator();
+        String query =" INSERT INTO "+table.getName()+" (";
+        String valori = "";
+        while(cols.hasNext()){
+            query += cols.next()+",";
+            valori+=DatabaseUtils.sqlEscapeString((String) vals.next())+",";
+        }
+        this.query = query.substring(0,query.length()-1)+" ) VALUES ( "+valori.substring(0,valori.length()-1)+" )";
+        return this;
+    }
+    public QueryBuilder insert(Table table,String[] values){
+        flush();
+        String query =" INSERT INTO "+table.getName()+" VALUES (";
+        for(int j=0;j<values.length;j++){
+            query+=DatabaseUtils.sqlEscapeString(values[j])+",";
+        }
+        this.query = query.substring(0,query.length()-1)+" )";
+        return this;
     }
     public void flush(){
         queryHistory.add(this.query);

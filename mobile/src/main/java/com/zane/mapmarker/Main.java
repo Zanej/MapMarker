@@ -1,10 +1,12 @@
 package com.zane.mapmarker;
 
+import android.database.Cursor;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.util.Log;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -35,8 +37,27 @@ public class Main extends AppCompatActivity {
                         .setAction("Action", null).show();
             }
         });
-        //Tento di creare una tabella
-        HashMap<String,String> values = new HashMap<String,String>();
+        DbHelper.context = this;
+        DbHelper.qb = new QueryBuilder();
+        DbHelper helper = new DbHelper(this);
+        Cursor tables = helper.getTables();
+        //System.out.println(tables.getCount());
+
+        if(tables.moveToFirst()){
+
+            do{
+                Cursor trovati = helper.getRows(tables.getString(0));
+                if(trovati.moveToFirst()){
+                    do{
+                        System.out.println(trovati.getInt(0));
+                    }while(trovati.moveToNext());
+                }
+                HashMap<String,String> parametri = new HashMap<>();
+                parametri.put("nome","Dennis");
+                helper.insert(tables.getString(0),parametri);
+            }while(tables.moveToNext());
+        }
+        /*HashMap<String,String> values = new HashMap<String,String>();
         String[] types = new String[3];
         values.put("nome","VARCHAR 200");
         values.put("cognome","VARCHAR 200");
@@ -54,7 +75,7 @@ public class Main extends AppCompatActivity {
         HashMap<String,Object> where = new HashMap<String,Object>();
         where.put("azienda","WEGO");
         //Questo è l'on
-        ArrayList<HashMap<String,Table>> on = new ArrayList<HashMap<String,Table>>();
+        ArrayList<HashMap<String,Table>> on = new ArrayList<>();
         HashMap<String,Table> dati_uno = new HashMap<String,Table>();
         HashMap<String,Table> dati_due = new HashMap<String,Table>();
         dati_uno.put("id_utente",new Table("Utenti","ciao",null,null));
@@ -79,16 +100,33 @@ public class Main extends AppCompatActivity {
         where = new HashMap<String,Object>();
         where.put("codice_fiscale", "ZNTDNS");
         que.Update(update, where, new Table("Utenti", "ciao", null, null));
-        que.OrderBy(new String[]{"nome"},new Table("Utenti","ciao",null,null));
+        que.OrderBy(new String[]{"nome"}, new Table("Utenti", "ciao", null, null));
         //DELETE
-        que.Delete(where, new Table("Utenti", "ciao", null, null)).OrderBy(new String[]{"nome"},new Table("Utenti","ciao",null,null)).Limit("1","");
+        que.Delete(where, new Table("Utenti", "ciao", null, null)).OrderBy(new String[]{"nome"},new Table("Utenti","ciao",null,null)).Limit("1", "");
+        //UPDATE JOIN
+        update = new HashMap<>();
+        update.put("nome","Dennis");
+        where = new HashMap<>();
+        where.put("nome", "Sinned");
+        que.Update(update, where, new Table("Utenti", "ciao", null, null));
+        ArrayList<HashMap<String,Table>> utentiaziende = new ArrayList<>();
+        HashMap<String,Table> utenti = new HashMap<>();
+        utenti.put("id_azienda",new Table("Utenti","ciao",null,null));
+        utenti.put("fulltime", new Table("Utenti", "ciao", null, null));
+        HashMap<String,Table> aziende = new HashMap<>();
+        aziende.put("id_azienda",new Table("Aziende","ciao",null,null));
+        aziende.put("fulltime",new Table("Aziende","ciao",null,null));
+        utentiaziende.add(utenti);
+        utentiaziende.add(aziende);
+        que.JoinUpdate(update,utentiaziende,where);
+        System.out.println(que.getQuery());
         //QueryFriendly
         QueryBuilderFriendly que_friendly = new QueryBuilderFriendly();
-        que_friendly.Select("Utenti",new String[]{"nome","cognome"},new String[]{"id_utente"},new Object[]{"1"});
-        System.out.println(que_friendly.getQuery());
+        que_friendly.Select("Utenti", new String[]{"nome", "cognome"}, new String[]{"id_utente"}, new Object[]{"1"});
+        //System.out.println(que_friendly.getQuery());
         //Query History
         TextView testo = (TextView) this.findViewById(R.id.val_sql);
-        testo.setText(QueryBuilder.queryHistoryString());
+        testo.setText(QueryBuilder.queryHistoryString());*/
     }
 
     @Override

@@ -15,12 +15,14 @@ public class Table {
      * @param name nome della tabella
      * @param key chiave della tabella
      */
-    public Table(String name,String key,HashMap<String,String> elems,String[] types){
+    public Table(String name,String key,HashMap<String,String> elems,HashMap<String,String> types){
         this.name = name;
         this.key = key;
         if(elems != null && types != null){
             QueryBuilder builder = new QueryBuilder();
-            builder.createTable(this.name,elems,types);
+            if(!builder.createTable(this.name,elems,types)){
+                System.out.println(builder.getQuery());
+            }
         }
     }
     public Table(Table table){
